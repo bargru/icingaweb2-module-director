@@ -1583,7 +1583,7 @@ abstract class DirectorObjectForm extends DirectorForm
             if (in_array('service', $statesScope)) {
                 $this->addElement('extensibleSet', 'states', array(
                     'label'        => $this->translate('Service States'),
-                    'multiOptions' => $this->optionallyAddFromEnum($this->enumStates()),
+                    'multiOptions' => $this->optionallyAddFromEnum($this->enumServiceStates()),
                     'description'  => $this->translate(
                         'The service states you want to get notifications for'
                     ),
