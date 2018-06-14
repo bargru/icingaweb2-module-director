@@ -3,6 +3,7 @@
 namespace Icinga\Module\Director\Forms;
 
 use Icinga\Module\Director\Web\Form\DirectorObjectForm;
+use Icinga\Module\Director\Web\Form\Validate\NamePattern;
 
 class IcingaNotificationForm extends DirectorObjectForm
 {
@@ -27,25 +28,45 @@ class IcingaNotificationForm extends DirectorObjectForm
                 'description' => $this->translate('Name for the Icinga notification you are going to create')
             ));
 
-            $this->eventuallyAddNameRestriction(
-                'director/notification/apply/filter-by-name'
-            );
+            $rName = 'director/notification/apply/filter-by-name';
+            foreach ($this->getAuth()->getRestrictions($rName) as $restriction) {
+                $this->getElement('object_name')->addValidator(
+                    new NamePattern($restriction)
+                );
+            }
         }
 
         $this->addDisabledElement()
-             ->addImportsElement()
-             ->addUsersElement()
-             ->addUsergroupsElement()
-             ->addIntervalElement()
-             ->addPeriodElement()
-             ->addTimesElements()
-             ->addAssignmentElements()
-             ->addDisabledElement()
-             ->addCommandElements()
-             ->addEventFilterElements()
-             ->addZoneElements()
-             ->groupMainProperties()
-             ->setButtons();
+            ->addImportsElement()
+            ->addUsersElement()
+            ->addUsergroupsElement()
+            ->addIntervalElement()
+            ->addPeriodElement()
+            ->addTimesElements()
+            ->addAssignmentElements()
+            ->addDisabledElement()
+            ->addCommandElements()
+            ->addEventFilterElement()
+            ->addZoneElements()
+            ->groupMainProperties()
+            ->setButtons();
+    }
+
+    protected function addEventFilterElement()
+    {
+        if ($this->isTemplate()) {
+            return $this->addEventFilterElements();
+        }
+
+        $applyTo = $this->getSentOrObjectValue('apply_to');
+
+        if (!$applyTo) {
+            return $this;
+        }
+
+        $this->addEventFilterElements(['states', 'types'], [$applyTo]);
+
+        return $this;
     }
 
     protected function addZoneElements()

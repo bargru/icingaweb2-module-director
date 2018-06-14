@@ -8,13 +8,13 @@ use Icinga\Module\Director\Db;
 use Icinga\Module\Director\Data\Db\DbObject;
 use Icinga\Module\Director\Data\Db\DbObjectWithSettings;
 use Icinga\Module\Director\Exception\NestingError;
+use Icinga\Module\Director\IcingaConfig\HostStateFilterSet;
+use Icinga\Module\Director\IcingaConfig\ServiceStateFilterSet;
 use Icinga\Module\Director\IcingaConfig\StateFilterSet;
 use Icinga\Module\Director\IcingaConfig\TypeFilterSet;
 use Icinga\Module\Director\Objects\IcingaTemplateChoice;
-use Icinga\Module\Director\Objects\IcingaCommand;
 use Icinga\Module\Director\Objects\IcingaObject;
 use Icinga\Module\Director\Util;
-use Icinga\Module\Director\Web\Form\Validate\NamePattern;
 use Zend_Form_Element as ZfElement;
 use Zend_Form_Element_Select as ZfSelect;
 
@@ -80,18 +80,6 @@ abstract class DirectorObjectForm extends DirectorForm
             $this->auth = Auth::getInstance();
         }
         return $this->auth;
-    }
-
-    protected function eventuallyAddNameRestriction($restrictionName)
-    {
-        $restrictions = $this->getAuth()->getRestrictions($restrictionName);
-        if (! empty($restrictions)) {
-            $this->getElement('object_name')->addValidator(
-                new NamePattern($restrictions)
-            );
-        }
-
-        return $this;
     }
 
     public function presetImports($imports)
@@ -637,11 +625,11 @@ abstract class DirectorObjectForm extends DirectorForm
 
             $msg = sprintf(
                 $object->hasBeenLoadedFromDb()
-                ? $this->translate('The %s has successfully been stored')
-                : $this->translate('A new %s has successfully been created'),
+                    ? $this->translate('The %s has successfully been stored')
+                    : $this->translate('A new %s has successfully been created'),
                 $this->translate($this->getObjectShortClassName())
             );
-                $object->store($this->db);
+            $object->store($this->db);
         } else {
             if ($this->isApiRequest()) {
                 $this->setHttpResponseCode(304);
@@ -703,7 +691,7 @@ abstract class DirectorObjectForm extends DirectorForm
     {
         if ($this->className === null) {
             return 'Icinga\\Module\\Director\\Objects\\'
-               . substr(join('', array_slice(explode('\\', get_class($this)), -1)), 0, -4);
+                . substr(join('', array_slice(explode('\\', get_class($this)), -1)), 0, -4);
         }
 
         return $this->className;
@@ -781,15 +769,14 @@ abstract class DirectorObjectForm extends DirectorForm
         } catch (Exception $e) {
             $this->addUniqueException($e);
         }
-
-        if ($this->shouldBeDeleted()) {
-            $this->deleteObject($this->object());
-        }
     }
 
     protected function handlePost()
     {
         $object = $this->object();
+        if ($this->shouldBeDeleted()) {
+            $this->deleteObject($object);
+        }
 
         $post = $this->getRequest()->getPost();
         $this->populate($post);
@@ -872,7 +859,7 @@ abstract class DirectorObjectForm extends DirectorForm
         $el = $this->createElement('submit', $label)
             ->setLabel($label)
             ->setDecorators(array('ViewHelper'));
-            //->removeDecorator('Label');
+        //->removeDecorator('Label');
 
         $this->deleteButtonName = $el->getName();
 
@@ -887,15 +874,6 @@ abstract class DirectorObjectForm extends DirectorForm
                     )
                 );
             }
-        } elseif ($object instanceof IcingaCommand && $object->isInUse()) {
-            $el->setAttrib('disabled', 'disabled');
-            $el->setAttrib(
-                'title',
-                sprintf(
-                    $this->translate('This Command is still in use by %d other objects'),
-                    $object->countDirectUses()
-                )
-            );
         }
 
         $this->addElement($el);
@@ -1025,8 +1003,8 @@ abstract class DirectorObjectForm extends DirectorForm
     public function optionallyAddFromEnum($enum)
     {
         return array(
-            null => $this->translate('- click to add more -')
-        ) + $enum;
+                null => $this->translate('- click to add more -')
+            ) + $enum;
     }
 
     protected function addObjectTypeElement()
@@ -1054,7 +1032,7 @@ abstract class DirectorObjectForm extends DirectorForm
                 );
             }
         } else {
-             $types = array('object' => $this->translate('Object'));
+            $types = array('object' => $this->translate('Object'));
         }
 
         if ($this->object()->supportsApplyRules()) {
@@ -1116,10 +1094,6 @@ abstract class DirectorObjectForm extends DirectorForm
      */
     protected function addChoices($type)
     {
-        if ($this->isTemplate()) {
-            return $this;
-        }
-
         $connection = $this->getDb();
         $choiceType = 'TemplateChoice' . ucfirst($type);
         $choices = IcingaObject::loadAllByType($choiceType, $connection);
@@ -1370,34 +1344,6 @@ abstract class DirectorObjectForm extends DirectorForm
         );
 
         $this->optionalBoolean(
-            'enable_flapping',
-            $this->translate('Enable flap detection'),
-            $this->translate('Whether flap detection is enabled on this object')
-        );
-
-        $this->addElement(
-            'text',
-            'flapping_threshold_high',
-            array(
-                'label' => $this->translate('Flapping threshold (high)'),
-                'description' => $this->translate(
-                    'Flapping upper bound in percent for a service to be considered flapping'
-                )
-            )
-        );
-
-        $this->addElement(
-            'text',
-            'flapping_threshold_low',
-            array(
-                'label' => $this->translate('Flapping threshold (low)'),
-                'description' => $this->translate(
-                    'Flapping lower bound in percent for a service to be considered not flapping'
-                )
-            )
-        );
-
-        $this->optionalBoolean(
             'volatile',
             $this->translate('Volatile'),
             $this->translate('Whether this check is volatile.')
@@ -1414,9 +1360,6 @@ abstract class DirectorObjectForm extends DirectorForm
             'enable_notifications',
             'enable_event_handler',
             'enable_perfdata',
-            'enable_flapping',
-            'flapping_threshold_high',
-            'flapping_threshold_low',
             'volatile'
         );
         $this->addToCheckExecutionDisplayGroup($elements);
@@ -1511,10 +1454,9 @@ abstract class DirectorObjectForm extends DirectorForm
      * Forms should use this helper method for objects using the typical
      * assign_filter column
      *
-     * @param array $properties Form element properties
+     * @param array  $properties Form element properties
      *
      * @return $this
-     * @throws \Zend_Form_Exception
      */
     protected function addAssignFilter($properties)
     {
@@ -1544,11 +1486,10 @@ abstract class DirectorObjectForm extends DirectorForm
      * TODO: Evaluate whether parts or all of this could be moved to the element
      * class.
      *
-     * @param string $name Element name
-     * @param array $properties Form element properties
+     * @param string $name       Element name
+     * @param array  $properties Form element properties
      *
      * @return $this
-     * @throws \Zend_Form_Exception
      */
     protected function addFilterElement($name, $properties)
     {
@@ -1572,40 +1513,70 @@ abstract class DirectorObjectForm extends DirectorForm
         return $this;
     }
 
-    protected function addEventFilterElements($elements = array('states','types'))
-    {
+    protected function addEventFilterElements($elements = ['states', 'types'], $stateTypes = ['host', 'service']
+    ) {
         if (in_array('states', $elements)) {
-            $this->addElement('extensibleSet', 'states', array(
-                'label' => $this->translate('States'),
-                'multiOptions' => $this->optionallyAddFromEnum($this->enumStates()),
-                'description'  => $this->translate(
-                    'The host/service states you want to get notifications for'
-                ),
-            ));
+            if (!array_diff(['host', 'service'], $stateTypes)) {
+                $this->addElement('extensibleSet', 'states', [
+                        'label'        => $this->translate('States'),
+                        'multiOptions' => $this->optionallyAddFromEnum($this->enumStates()),
+                        'description'  => $this->translate(
+                            'The host/service states you want to get notifications for'
+                        ),
+                    ]
+                );
+            } else {
+                if (in_array('service', $stateTypes)) {
+                    $this->addElement('extensibleSet', 'states', [
+                            'label'        => $this->translate('Service States'),
+                            'multiOptions' => $this->optionallyAddFromEnum($this->enumServiceStates()),
+                            'description'  => $this->translate(
+                                'The service states you want to get notifications for'
+                            ),
+                        ]
+                    );
+                } else {
+                    if (in_array('host', $stateTypes)) {
+                        $this->addElement('extensibleSet', 'states', [
+                                'label'        => $this->translate('Host States'),
+                                'multiOptions' => $this->optionallyAddFromEnum($this->enumHostStates()),
+                                'description'  => $this->translate(
+                                    'The host states you want to get notifications for'
+                                ),
+                            ]
+                        );
+                    }
+                }
+            }
         }
 
         if (in_array('types', $elements)) {
-            $this->addElement('extensibleSet', 'types', array(
-                'label' => $this->translate('Transition types'),
-                'multiOptions' => $this->optionallyAddFromEnum($this->enumTypes()),
-                'description'  => $this->translate(
-                    'The state transition types you want to get notifications for'
-                ),
-            ));
+            $this->addElement(
+                'extensibleSet', 'types', [
+                    'label'        => $this->translate('Transition types'),
+                    'multiOptions' => $this->optionallyAddFromEnum($this->enumTypes()),
+                    'description'  => $this->translate(
+                        'The state transition types you want to get notifications for'
+                    ),
+                ]
+            );
         }
 
-        $this->addDisplayGroup($elements, 'event_filters', array(
-            'decorators' => array(
-                'FormElements',
-                array('HtmlTag', array('tag' => 'dl')),
-                'Fieldset',
-            ),
-            'order' =>70,
-            'legend' => $this->translate('State and transition type filters')
-        ));
+        $this->addDisplayGroup(
+            $elements, 'event_filters', [
+                'decorators' => [
+                    'FormElements',
+                    ['HtmlTag', ['tag' => 'dl']],
+                    'Fieldset',
+                ],
+                'order'      => 70,
+                'legend'     => $this->translate('State and transition type filters')
+            ]
+        );
 
         return $this;
     }
+
 
     /**
      * @param  string $permission
@@ -1622,8 +1593,8 @@ abstract class DirectorObjectForm extends DirectorForm
         // and nobody will help you.
         if ($this->allowsExperimental === null) {
             $this->allowsExperimental = $this->db->settings()->get(
-                'experimental_features'
-            ) === 'allow';
+                    'experimental_features'
+                ) === 'allow';
         }
 
         return $this->allowsExperimental;
@@ -1632,6 +1603,18 @@ abstract class DirectorObjectForm extends DirectorForm
     protected function enumStates()
     {
         $set = new StateFilterSet();
+        return $set->enumAllowedValues();
+    }
+
+    protected function enumHostStates()
+    {
+        $set = new HostStateFilterSet();
+        return $set->enumAllowedValues();
+    }
+
+    protected function enumServiceStates()
+    {
+        $set = new ServiceStateFilterSet();
         return $set->enumAllowedValues();
     }
 
